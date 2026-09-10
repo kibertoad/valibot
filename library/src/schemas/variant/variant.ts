@@ -7,74 +7,18 @@ import type {
   InferOutput,
   OutputDataset,
 } from '../../types/index.ts';
-import { _addIssue, _joinExpects, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _buildDiscriminatorMap,
+  _joinExpects,
+  _standardSchema,
+} from '../../utils/index.ts';
 import type {
   InferVariantIssue,
   VariantIssue,
   VariantOptions,
   VariantOptionSchema,
 } from './types.ts';
-
-/**
- * Builds a map from discriminator value to variant option for O(1) dispatch.
- *
- * Returns `null` (disabling the fast path) whenever the options cannot be
- * unambiguously keyed by a single discriminator value: a nested variant, a
- * discriminator schema whose accepted values are not statically enumerable
- * (only `literal`, `enum` and `picklist` are), or a value claimed by more than
- * one option.
- *
- * @param key The discriminator key.
- * @param options The variant options.
- *
- * @returns The discriminator map or `null`.
- *
- * @internal
- */
-// @__NO_SIDE_EFFECTS__
-function _buildDiscriminatorMap(
-  key: string,
-  options: VariantOptions<string>
-): Map<unknown, VariantOptions<string>[number]> | null {
-  const map = new Map<unknown, VariantOptions<string>[number]>();
-  for (const option of options) {
-    // Nested variants cannot be statically keyed here
-    if (option.type === 'variant') {
-      return null;
-    }
-    const discriminatorSchema = option.entries[key];
-    let values: readonly unknown[];
-    if (!discriminatorSchema) {
-      return null;
-    } else if (discriminatorSchema.type === 'literal') {
-      // @ts-expect-error
-      values = [discriminatorSchema.literal];
-    } else if (
-      discriminatorSchema.type === 'enum' ||
-      discriminatorSchema.type === 'picklist'
-    ) {
-      // @ts-expect-error
-      values = discriminatorSchema.options;
-    } else {
-      // Non-enumerable discriminator (e.g. optional, union, custom)
-      return null;
-    }
-    for (const value of values) {
-      // `NaN` is excluded because `Map` lookups use SameValueZero (NaN matches
-      // NaN) whereas a `literal` discriminator compares with `===` (NaN never
-      // matches), so a NaN discriminator must use the slow path for parity
-      if (Number.isNaN(value)) {
-        return null;
-      }
-      // Colliding discriminator values are ambiguous
-      if (map.has(value)) {
-        return null;
-      }
-      map.set(value, option);
-    }
-  }
-  return map;
-}
 
 /**
  * Variant schema interface.
@@ -156,6 +100,16 @@ export function variant(
   VariantOptions<string>,
   ErrorMessage<VariantIssue> | undefined
 > {
+  // Lazily built map from discriminator value to option for O(1) dispatch. It
+  // is `null` whenever the options cannot be unambiguously keyed by a single
+  // discriminator value, in which case the slow path is used. The cache lives
+  // in this closure so that parsing never adds observable properties to the
+  // returned schema object.
+  let discriminatorMap:
+    | Map<unknown, VariantOptions<string>[number]>
+    | null
+    | undefined;
+
   return _standardSchema({
     kind: 'schema',
     type: 'variant',
@@ -171,26 +125,18 @@ export function variant(
 
       // If root type is valid, check nested types
       if (input && typeof input === 'object') {
-        // Lazily build a discriminator map for O(1) option dispatch. It is
-        // `null` whenever the options cannot be unambiguously keyed by a single
-        // discriminator value, in which case the slow path below is used.
-        // @ts-expect-error
-        let discriminatorMap = this._discriminatorMap as
-          | Map<unknown, VariantOptions<string>[number]>
-          | null
-          | undefined;
+        // Build the discriminator map on first use. `null` is a cached result
+        // (fast path disabled), so only `undefined` triggers a rebuild.
         if (discriminatorMap === undefined) {
-          discriminatorMap = _buildDiscriminatorMap(this.key, this.options);
-          // @ts-expect-error
-          this._discriminatorMap = discriminatorMap;
+          discriminatorMap = _buildDiscriminatorMap(key, options);
         }
 
         // Fast path: dispatch directly to the single option whose discriminator
         // matches the input. On a miss, fall through to the slow path so the
         // discriminator issue and message are produced identically.
-        if (discriminatorMap && this.key in input) {
+        if (discriminatorMap && key in input) {
           // @ts-expect-error
-          const option = discriminatorMap.get(input[this.key]);
+          const option = discriminatorMap.get(input[key]);
           if (option) {
             return option['~run']({ value: input }, config) as OutputDataset<
               InferOutput<VariantOptions<string>[number]>,
