@@ -7,11 +7,7 @@ import type {
   InferOutput,
   OutputDataset,
 } from '../../types/index.ts';
-import {
-  _addIssue,
-  _getStandardProps,
-  _joinExpects,
-} from '../../utils/index.ts';
+import { _addIssue, _joinExpects, _standardSchema } from '../../utils/index.ts';
 import type {
   InferVariantIssue,
   VariantIssue,
@@ -161,7 +157,7 @@ export function variantAsync(
   VariantOptionsAsync<string>,
   ErrorMessage<VariantIssue> | undefined
 > {
-  return {
+  return _standardSchema({
     kind: 'schema',
     type: 'variant',
     reference: variantAsync,
@@ -170,9 +166,6 @@ export function variantAsync(
     key,
     options,
     message,
-    get '~standard'() {
-      return _getStandardProps(this);
-    },
     async '~run'(dataset, config) {
       // Get input value from dataset
       const input = dataset.value;
@@ -355,5 +348,5 @@ export function variantAsync(
         VariantIssue | BaseIssue<unknown>
       >;
     },
-  };
+  });
 }

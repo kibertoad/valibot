@@ -78,6 +78,7 @@ type Action =
       string,
       v.ErrorMessage<v.JwsCompactIssue<string>> | undefined
     >
+  | v.KsuidAction<string, v.ErrorMessage<v.KsuidIssue<string>> | undefined>
   | v.LengthAction<
       v.LengthInput,
       number,
@@ -214,6 +215,7 @@ export function convertAction(
     case 'isrc':
     case 'iso_time_second':
     case 'iso_week':
+    case 'ksuid':
     case 'mac':
     case 'mac48':
     case 'mac64':
@@ -296,6 +298,7 @@ export function convertAction(
           errors,
           `The "gt_value" action is not supported on type "${jsonSchema.type}".`
         );
+        break;
       }
       if (config?.target === 'openapi-3.0') {
         errors = addError(
@@ -386,6 +389,7 @@ export function convertAction(
           errors,
           `The "lt_value" action is not supported on type "${jsonSchema.type}".`
         );
+        break;
       }
       if (config?.target === 'openapi-3.0') {
         errors = addError(
@@ -424,6 +428,7 @@ export function convertAction(
           errors,
           `The "max_value" action is not supported on type "${jsonSchema.type}".`
         );
+        break;
       }
       jsonSchema.maximum = valibotAction.requirement as number;
       break;
@@ -444,6 +449,22 @@ export function convertAction(
           ];
         } else {
           jsonSchema.examples = valibotAction.metadata.examples;
+        }
+      }
+      // Hint: Any other metadata properties are added to the JSON Schema
+      // without further validation, similar to other schema libraries. This
+      // allows custom annotations and standard keywords such as "format" to
+      // be specified via the metadata action. The "__proto__" key is skipped
+      // to prevent prototype pollution.
+      for (const key of Object.keys(valibotAction.metadata)) {
+        if (
+          key !== 'title' &&
+          key !== 'description' &&
+          key !== 'examples' &&
+          key !== '__proto__'
+        ) {
+          // @ts-expect-error
+          jsonSchema[key] = valibotAction.metadata[key];
         }
       }
       break;
@@ -475,6 +496,7 @@ export function convertAction(
           errors,
           `The "min_value" action is not supported on type "${jsonSchema.type}".`
         );
+        break;
       }
       jsonSchema.minimum = valibotAction.requirement as number;
       break;

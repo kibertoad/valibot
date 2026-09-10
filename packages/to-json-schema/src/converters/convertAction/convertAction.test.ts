@@ -174,6 +174,18 @@ describe('convertAction', () => {
     });
   });
 
+  test('should convert ksuid action', () => {
+    expect(convertAction({}, v.ksuid<string>(), undefined)).toStrictEqual({
+      pattern: v.KSUID_REGEX.source,
+    });
+    expect(
+      convertAction({ type: 'string' }, v.ksuid<string>(), undefined)
+    ).toStrictEqual({
+      type: 'string',
+      pattern: v.KSUID_REGEX.source,
+    });
+  });
+
   test('should convert mac action', () => {
     expect(convertAction({}, v.mac<string>(), undefined)).toStrictEqual({
       pattern: v.MAC_REGEX.source,
@@ -409,6 +421,17 @@ describe('convertAction', () => {
     });
   });
 
+  test('examples should type as an array, not a bare JSON Schema value', () => {
+    const jsonSchema = convertAction({}, v.examples(['foo', 'bar']), undefined);
+    // `.map` only exists on the array member of `JsonSchemaType`. If
+    // `examples` regresses to allowing a non-array value, this fails to
+    // compile under `tsc --noEmit`, not just at runtime.
+    expect(jsonSchema.examples?.map((example) => example)).toStrictEqual([
+      'foo',
+      'bar',
+    ]);
+  });
+
   test('should merge examples from multiple actions', () => {
     const jsonSchema = {};
     convertAction(jsonSchema, v.examples(['foo']), undefined);
@@ -453,6 +476,34 @@ describe('convertAction', () => {
     expect(() =>
       convertAction({ type: 'string' }, action, undefined)
     ).toThrowError(error2);
+  });
+
+  test('should warn error for gt value action with invalid type', () => {
+    expect(
+      convertAction({}, v.gtValue<v.ValueInput, 3>(3), { errorMode: 'warn' })
+    ).toStrictEqual({});
+    expect(console.warn).toHaveBeenLastCalledWith(
+      'The "gt_value" action is not supported on type "undefined".'
+    );
+    expect(
+      convertAction({ type: 'string' }, v.gtValue<v.ValueInput, 'm'>('m'), {
+        errorMode: 'warn',
+      })
+    ).toStrictEqual({ type: 'string' });
+    expect(console.warn).toHaveBeenLastCalledWith(
+      'The "gt_value" action is not supported on type "string".'
+    );
+  });
+
+  test('should ignore error for gt value action with invalid type', () => {
+    expect(
+      convertAction({}, v.gtValue<v.ValueInput, 3>(3), { errorMode: 'ignore' })
+    ).toStrictEqual({});
+    expect(
+      convertAction({ type: 'string' }, v.gtValue<v.ValueInput, 'm'>('m'), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({ type: 'string' });
   });
 
   test('should throw error for gt value action with openapi-3.0', () => {
@@ -702,6 +753,36 @@ describe('convertAction', () => {
     ).toThrowError(error2);
   });
 
+  test('should warn error for lt value action with invalid type', () => {
+    expect(
+      convertAction({}, v.ltValue<v.ValueInput, 10>(10), { errorMode: 'warn' })
+    ).toStrictEqual({});
+    expect(console.warn).toHaveBeenLastCalledWith(
+      'The "lt_value" action is not supported on type "undefined".'
+    );
+    expect(
+      convertAction({ type: 'string' }, v.ltValue<v.ValueInput, 'm'>('m'), {
+        errorMode: 'warn',
+      })
+    ).toStrictEqual({ type: 'string' });
+    expect(console.warn).toHaveBeenLastCalledWith(
+      'The "lt_value" action is not supported on type "string".'
+    );
+  });
+
+  test('should ignore error for lt value action with invalid type', () => {
+    expect(
+      convertAction({}, v.ltValue<v.ValueInput, 10>(10), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({});
+    expect(
+      convertAction({ type: 'string' }, v.ltValue<v.ValueInput, 'm'>('m'), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({ type: 'string' });
+  });
+
   test('should throw error for lt value action with openapi-3.0', () => {
     const error = 'The "lt_value" action is not supported for OpenAPI 3.0.';
     expect(() =>
@@ -832,20 +913,31 @@ describe('convertAction', () => {
   test('should warn error for max value action with invalid type', () => {
     expect(
       convertAction({}, v.maxValue<v.ValueInput, 3>(3), { errorMode: 'warn' })
-    ).toStrictEqual({
-      maximum: 3,
-    });
+    ).toStrictEqual({});
     expect(console.warn).toHaveBeenLastCalledWith(
       'The "max_value" action is not supported on type "undefined".'
     );
     expect(
-      convertAction({ type: 'string' }, v.maxValue<v.ValueInput, 3>(3), {
+      convertAction({ type: 'string' }, v.maxValue<v.ValueInput, 'm'>('m'), {
         errorMode: 'warn',
       })
-    ).toStrictEqual({ type: 'string', maximum: 3 });
+    ).toStrictEqual({ type: 'string' });
     expect(console.warn).toHaveBeenLastCalledWith(
       'The "max_value" action is not supported on type "string".'
     );
+  });
+
+  test('should ignore error for max value action with invalid type', () => {
+    expect(
+      convertAction({}, v.maxValue<v.ValueInput, 3>(3), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({});
+    expect(
+      convertAction({ type: 'string' }, v.maxValue<v.ValueInput, 'm'>('m'), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({ type: 'string' });
   });
 
   test('should convert metadata action', () => {
@@ -864,6 +956,7 @@ describe('convertAction', () => {
       title: 'title',
       description: 'description',
       examples: ['example'],
+      other: 'other',
     });
     expect(
       convertAction(
@@ -886,11 +979,50 @@ describe('convertAction', () => {
           title: 123,
           description: null,
           examples: { foo: 'bar' },
-          other: 'other',
         }),
         undefined
       )
     ).toStrictEqual({});
+  });
+
+  test('should add other metadata properties to JSON Schema', () => {
+    expect(
+      convertAction(
+        { type: 'string' },
+        v.metadata({
+          format: 'my-format',
+          'x-custom': { foo: 'bar' },
+          deprecated: true,
+        }),
+        undefined
+      )
+    ).toStrictEqual({
+      type: 'string',
+      format: 'my-format',
+      'x-custom': { foo: 'bar' },
+      deprecated: true,
+    });
+  });
+
+  test('should ignore inherited metadata properties', () => {
+    const metadata: Record<string, unknown> = Object.create({
+      'x-inherited': true,
+    });
+    metadata['x-own'] = 'own';
+    expect(convertAction({}, v.metadata(metadata), undefined)).toStrictEqual({
+      'x-own': 'own',
+    });
+  });
+
+  test('should not pollute prototype via metadata properties', () => {
+    const metadata: Record<string, unknown> = JSON.parse(
+      '{"__proto__": {"polluted": true}, "x-custom": "safe"}'
+    );
+    const jsonSchema = convertAction({}, v.metadata(metadata), undefined);
+    expect(jsonSchema).toStrictEqual({ 'x-custom': 'safe' });
+    expect(Object.getPrototypeOf(jsonSchema)).toBe(Object.prototype);
+    // @ts-expect-error
+    expect({}.polluted).toBeUndefined();
   });
 
   test('should convert min entries action', () => {
@@ -1014,20 +1146,31 @@ describe('convertAction', () => {
   test('should warn error for min value action with invalid type', () => {
     expect(
       convertAction({}, v.minValue<v.ValueInput, 3>(3), { errorMode: 'warn' })
-    ).toStrictEqual({
-      minimum: 3,
-    });
+    ).toStrictEqual({});
     expect(console.warn).toHaveBeenLastCalledWith(
       'The "min_value" action is not supported on type "undefined".'
     );
     expect(
-      convertAction({ type: 'string' }, v.minValue<v.ValueInput, 3>(3), {
+      convertAction({ type: 'string' }, v.minValue<v.ValueInput, 'm'>('m'), {
         errorMode: 'warn',
       })
-    ).toStrictEqual({ type: 'string', minimum: 3 });
+    ).toStrictEqual({ type: 'string' });
     expect(console.warn).toHaveBeenLastCalledWith(
       'The "min_value" action is not supported on type "string".'
     );
+  });
+
+  test('should ignore error for min value action with invalid type', () => {
+    expect(
+      convertAction({}, v.minValue<v.ValueInput, 3>(3), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({});
+    expect(
+      convertAction({ type: 'string' }, v.minValue<v.ValueInput, 'm'>('m'), {
+        errorMode: 'ignore',
+      })
+    ).toStrictEqual({ type: 'string' });
   });
 
   test('should convert multiple of action', () => {
