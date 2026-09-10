@@ -389,6 +389,44 @@ describe('toJsonSchema', () => {
   });
 
   describe('should throw error', () => {
+    test('for impossible lengths before non empty', () => {
+      for (const schema of [
+        v.pipe(v.string(), v.minLength(Infinity), v.nonEmpty()),
+        v.pipe(v.array(v.number()), v.minLength(Infinity), v.nonEmpty()),
+      ]) {
+        expect(() => toJsonSchema(schema)).toThrowError(
+          'The requirement of the "min_length" action must be a non-negative integer.'
+        );
+      }
+    });
+
+    test('for impossible entry count before finite minimum', () => {
+      expect(() =>
+        toJsonSchema(
+          v.pipe(
+            v.record(v.string(), v.number()),
+            v.minEntries(Infinity),
+            v.minEntries(1)
+          )
+        )
+      ).toThrowError(
+        'The requirement of the "min_entries" action must be a non-negative integer.'
+      );
+    });
+
+    test('for impossible numeric bounds before safe integer', () => {
+      expect(() =>
+        toJsonSchema(v.pipe(v.number(), v.minValue(Infinity), v.safeInteger()))
+      ).toThrowError(
+        'The requirement of the "min_value" action is not JSON compatible.'
+      );
+      expect(() =>
+        toJsonSchema(v.pipe(v.number(), v.maxValue(-Infinity), v.safeInteger()))
+      ).toThrowError(
+        'The requirement of the "max_value" action is not JSON compatible.'
+      );
+    });
+
     test('for invalid file schema', () => {
       expect(() => toJsonSchema(v.file())).toThrowError(
         'The "file" schema cannot be converted to JSON Schema.'
@@ -477,6 +515,229 @@ describe('toJsonSchema', () => {
           type: 'string',
         }
       );
+    });
+  });
+
+  describe('should keep stricter bound when actions overlap', () => {
+    test('for zero string lengths', () => {
+      expect(
+        toJsonSchema(
+          v.pipe(v.string(), v.minLength(0), v.maxLength(0), v.length(0))
+        )
+      ).toStrictEqual({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'string',
+        minLength: 0,
+        maxLength: 0,
+      });
+    });
+
+    test('for zero array lengths', () => {
+      expect(
+        toJsonSchema(
+          v.pipe(
+            v.array(v.number()),
+            v.minLength(0),
+            v.maxLength(0),
+            v.length(0)
+          )
+        )
+      ).toStrictEqual({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'array',
+        items: { type: 'number' },
+        minItems: 0,
+        maxItems: 0,
+      });
+    });
+
+    test('for zero entry counts', () => {
+      expect(
+        toJsonSchema(
+          v.pipe(
+            v.record(v.string(), v.number()),
+            v.minEntries(0),
+            v.maxEntries(0),
+            v.entries(0)
+          )
+        )
+      ).toStrictEqual({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        additionalProperties: { type: 'number' },
+        propertyNames: { type: 'string' },
+        minProperties: 0,
+        maxProperties: 0,
+      });
+    });
+
+    test('for negative and fractional numeric bounds', () => {
+      expect(
+        toJsonSchema(
+          v.pipe(
+            v.number(),
+            v.minValue(-1.5),
+            v.maxValue(1.5),
+            v.gtValue(-0.5),
+            v.ltValue(0.5)
+          )
+        )
+      ).toStrictEqual({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'number',
+        minimum: -1.5,
+        maximum: 1.5,
+        exclusiveMinimum: -0.5,
+        exclusiveMaximum: 0.5,
+      });
+    });
+
+    test('for repeated numeric bounds in either order', () => {
+      for (const schema of [
+        v.pipe(
+          v.number(),
+          v.minValue(-1),
+          v.minValue(0),
+          v.maxValue(1),
+          v.maxValue(0)
+        ),
+        v.pipe(
+          v.number(),
+          v.minValue(0),
+          v.minValue(-1),
+          v.maxValue(0),
+          v.maxValue(1)
+        ),
+        v.pipe(
+          v.number(),
+          v.minValue(0),
+          v.minValue(0),
+          v.maxValue(0),
+          v.maxValue(0)
+        ),
+      ]) {
+        expect(toJsonSchema(schema)).toStrictEqual({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'number',
+          minimum: 0,
+          maximum: 0,
+        });
+      }
+    });
+
+    test('for repeated exclusive bounds in either order', () => {
+      for (const schema of [
+        v.pipe(
+          v.number(),
+          v.gtValue(-1),
+          v.gtValue(0),
+          v.ltValue(2),
+          v.ltValue(1)
+        ),
+        v.pipe(
+          v.number(),
+          v.gtValue(0),
+          v.gtValue(-1),
+          v.ltValue(1),
+          v.ltValue(2)
+        ),
+      ]) {
+        expect(toJsonSchema(schema)).toStrictEqual({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'number',
+          exclusiveMinimum: 0,
+          exclusiveMaximum: 1,
+        });
+      }
+    });
+
+    test('for contradictory string lengths in either order', () => {
+      for (const schema of [
+        v.pipe(v.string(), v.length(2), v.length(3)),
+        v.pipe(v.string(), v.length(3), v.length(2)),
+      ]) {
+        expect(toJsonSchema(schema)).toStrictEqual({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'string',
+          minLength: 3,
+          maxLength: 2,
+        });
+      }
+    });
+
+    test('for contradictory array lengths in either order', () => {
+      for (const schema of [
+        v.pipe(v.array(v.number()), v.length(2), v.length(3)),
+        v.pipe(v.array(v.number()), v.length(3), v.length(2)),
+      ]) {
+        expect(toJsonSchema(schema)).toStrictEqual({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'array',
+          items: { type: 'number' },
+          minItems: 3,
+          maxItems: 2,
+        });
+      }
+    });
+
+    test('for contradictory entry counts in either order', () => {
+      for (const schema of [
+        v.pipe(v.record(v.string(), v.number()), v.entries(2), v.entries(3)),
+        v.pipe(v.record(v.string(), v.number()), v.entries(3), v.entries(2)),
+      ]) {
+        expect(toJsonSchema(schema)).toStrictEqual({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'object',
+          additionalProperties: { type: 'number' },
+          propertyNames: { type: 'string' },
+          minProperties: 3,
+          maxProperties: 2,
+        });
+      }
+    });
+
+    test('for safe integer and numeric bounds in either order', () => {
+      for (const schema of [
+        v.pipe(
+          v.number(),
+          v.safeInteger(),
+          v.minValue(Number.MIN_SAFE_INTEGER - 1),
+          v.maxValue(Number.MAX_SAFE_INTEGER + 1)
+        ),
+        v.pipe(
+          v.number(),
+          v.minValue(Number.MIN_SAFE_INTEGER - 1),
+          v.maxValue(Number.MAX_SAFE_INTEGER + 1),
+          v.safeInteger()
+        ),
+      ]) {
+        expect(toJsonSchema(schema)).toStrictEqual({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          type: 'integer',
+          minimum: Number.MIN_SAFE_INTEGER,
+          maximum: Number.MAX_SAFE_INTEGER,
+        });
+      }
+    });
+
+    test('for non empty after min length', () => {
+      expect(
+        toJsonSchema(v.pipe(v.string(), v.minLength(3), v.nonEmpty()))
+      ).toStrictEqual({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'string',
+        minLength: 3,
+      });
+    });
+
+    test('for repeated min value actions', () => {
+      expect(
+        toJsonSchema(v.pipe(v.number(), v.minValue(5), v.minValue(3)))
+      ).toStrictEqual({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'number',
+        minimum: 5,
+      });
     });
   });
 });
