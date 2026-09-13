@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'vitest';
-import { enum as enum_ } from '../../schemas/enum/index.ts';
-import { literal } from '../../schemas/literal/index.ts';
-import { looseObject } from '../../schemas/looseObject/index.ts';
-import { number } from '../../schemas/number/index.ts';
-import { object, objectAsync } from '../../schemas/object/index.ts';
-import { optional } from '../../schemas/optional/index.ts';
-import { picklist } from '../../schemas/picklist/index.ts';
-import { strictObject } from '../../schemas/strictObject/index.ts';
-import { string } from '../../schemas/string/index.ts';
-import { union } from '../../schemas/union/index.ts';
-import { variant } from '../../schemas/variant/variant.ts';
+import { enum as enum_ } from '../../../enum/index.ts';
+import { literal } from '../../../literal/index.ts';
+import { looseObject } from '../../../looseObject/index.ts';
+import { number } from '../../../number/index.ts';
+import { object, objectAsync } from '../../../object/index.ts';
+import { optional } from '../../../optional/index.ts';
+import { picklist } from '../../../picklist/index.ts';
+import { strictObject } from '../../../strictObject/index.ts';
+import { string } from '../../../string/index.ts';
+import { union } from '../../../union/index.ts';
+import { variant } from '../../variant.ts';
 import { _buildDiscriminatorMap } from './_buildDiscriminatorMap.ts';
 
 describe('_buildDiscriminatorMap', () => {

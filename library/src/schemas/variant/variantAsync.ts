@@ -7,12 +7,7 @@ import type {
   InferOutput,
   OutputDataset,
 } from '../../types/index.ts';
-import {
-  _addIssue,
-  _buildDiscriminatorMap,
-  _joinExpects,
-  _standardSchema,
-} from '../../utils/index.ts';
+import { _addIssue, _joinExpects, _standardSchema } from '../../utils/index.ts';
 import type {
   InferVariantIssue,
   VariantIssue,
@@ -20,6 +15,7 @@ import type {
   VariantOptionSchema,
   VariantOptionSchemaAsync,
 } from './types.ts';
+import { _buildDiscriminatorMap } from './utils/index.ts';
 import type { variant } from './variant.ts';
 
 /**

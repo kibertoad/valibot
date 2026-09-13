@@ -1,7 +1,4 @@
-import type {
-  VariantOptions,
-  VariantOptionsAsync,
-} from '../../schemas/variant/types.ts';
+import type { VariantOptions, VariantOptionsAsync } from '../../types.ts';
 
 /**
  * Builds a map from discriminator value to variant option for O(1) dispatch.
