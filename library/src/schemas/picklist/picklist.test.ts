@@ -126,6 +126,20 @@ describe('picklist', () => {
     });
   });
 
+  test('should snapshot the options at creation', () => {
+    // `expects` is built from the options at creation, so membership is too
+    const options = ['foo', 'bar'];
+    const schema = picklist(options);
+    options.push('baz');
+    options.splice(0, 1);
+    expect(schema.expects).toBe('("foo" | "bar")');
+    expect(schema['~run']({ value: 'foo' }, {})).toStrictEqual({
+      typed: true,
+      value: 'foo',
+    });
+    expect(schema['~run']({ value: 'baz' }, {}).issues).toBeDefined();
+  });
+
   test('should not mutate the schema object', () => {
     const schema = picklist(['foo', 'bar']);
     const keys = Reflect.ownKeys(schema);
