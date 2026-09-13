@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { decimal, email, url } from '../../actions/index.ts';
 import { pipe } from '../../methods/index.ts';
 import { EMAIL_REGEX } from '../../regex.ts';
@@ -1100,6 +1100,25 @@ describe('variant', () => {
           { type: 'bar', value: 'hello' },
         ]
       );
+    });
+
+    test('without running the other options', () => {
+      const fooOption = object({ type: literal('foo'), value: string() });
+      const barOption = object({ type: literal('bar'), value: number() });
+      const schema = variant('type', [fooOption, barOption]);
+      const fooDiscriminator = vi.spyOn(fooOption.entries.type, '~run');
+      const barRun = vi.spyOn(barOption, '~run');
+      const input = { type: 'bar', value: 123 };
+
+      expect(schema['~run']({ value: input }, {})).toStrictEqual({
+        typed: true,
+        value: input,
+      });
+
+      // The slow path runs the discriminator of every option until one
+      // matches, so an untouched `foo` discriminator proves the map dispatched
+      expect(fooDiscriminator).not.toHaveBeenCalled();
+      expect(barRun).toHaveBeenCalledTimes(1);
     });
 
     test('without mutating the schema object', () => {

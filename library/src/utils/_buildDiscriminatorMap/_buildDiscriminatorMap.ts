@@ -9,8 +9,11 @@ import type {
  * Returns `null` (disabling the fast path) whenever the options cannot be
  * unambiguously keyed by a single discriminator value: a nested variant, a
  * discriminator schema whose accepted values are not statically enumerable
- * (only `literal`, `enum` and `picklist` are), or a value claimed by more than
- * one option.
+ * (only `literal`, `enum` and `picklist` are), or a value claimed by two
+ * different options.
+ *
+ * The returned map is a snapshot of the options it was called with, so callers
+ * that cache it must not use it for options that changed afterwards.
  *
  * @param key The discriminator key.
  * @param options The variant options.
@@ -51,8 +54,9 @@ export function _buildDiscriminatorMap<
     // `Map` keys use SameValueZero, the same comparison `literal`, `enum` and
     // `picklist` use, so `NaN` and `-0` dispatch exactly as they validate
     for (const value of values) {
-      // Colliding discriminator values are ambiguous
-      if (map.has(value)) {
+      // A value claimed by two different options is ambiguous, but the same
+      // option listing a value twice (e.g. `picklist(['foo', 'foo'])`) is not
+      if (map.has(value) && map.get(value) !== option) {
         return null;
       }
       map.set(value, option);

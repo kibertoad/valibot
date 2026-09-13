@@ -88,6 +88,18 @@ describe('_buildDiscriminatorMap', () => {
       );
     });
 
+    test('for values repeated within one option', () => {
+      // A value listed twice by the same option is not ambiguous
+      const foo = object({ type: picklist(['foo', 'foo']) });
+      const bar = object({ type: literal('bar') });
+      expect(_buildDiscriminatorMap('type', [foo, bar])).toStrictEqual(
+        new Map<unknown, unknown>([
+          ['foo', foo],
+          ['bar', bar],
+        ])
+      );
+    });
+
     test('for empty options', () => {
       expect(_buildDiscriminatorMap('type', [])).toStrictEqual(new Map());
     });
