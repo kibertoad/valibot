@@ -2,6 +2,10 @@
 
 All notable changes to the library will be documented in this file.
 
+## vX.X.X (Month DD, YYYY)
+
+- Change `variant` and `variantAsync` schemas to dispatch options through a discriminator lookup map when their discriminator values are statically known and unambiguous to improve performance (pull request #1641)
+
 ## v1.5.0 (September 09, 2026)
 
 - Add `codePoints`, `maxCodePoints`, `minCodePoints` and `notCodePoints` validation actions to validate the number of Unicode code points (pull request #888)
